@@ -1,4 +1,6 @@
+use std::fs::File;
 use std::io::{self, Read, Write};
+use std::path::Path;
 
 pub use sha2::{Digest, Sha256};
 
@@ -57,4 +59,47 @@ pub fn read_tcp_header<R: Read>(r: &mut R) -> io::Result<TcpHeader> {
         size: u64::from_be_bytes(size),
         sha256,
     })
+}
+
+pub fn get_filename(file_path: &str) -> String {
+    Path::new(file_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.is_empty())
+        .unwrap_or("unknown-name")
+        .to_string()
+}
+
+pub fn calculate_file_hash(path: &Path, buffer_size: usize) -> io::Result<Sha256Digest> {
+    let mut file = File::open(path)?;
+    let mut buffer = vec![0u8; buffer_size.max(1)];
+    let mut hasher = Sha256::new();
+
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buffer[..n]);
+    }
+    Ok(finish(hasher))
+}
+
+pub fn finish(hasher: Sha256) -> Sha256Digest {
+    let mut out = [0u8; DIGEST_LENGTH];
+    out.copy_from_slice(&hasher.finalize());
+
+    out
+}
+
+pub fn to_hex(digest: &Sha256Digest) -> String {
+    digest.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+pub fn calculate_mb_per_sec(bytes: u64, secs: f64) -> f64 {
+    if secs > 0.0 {
+        bytes as f64 / 1_000_000.0 / secs
+    } else {
+        0.0
+    }
 }
